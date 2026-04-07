@@ -122,7 +122,7 @@ function snapToCommon(value: number): number {
 
 export function generateSpacingMetadata(pxValue: number) {
   return {
-    px_value: pxValue,
-    rem_value: pxValue / 16,
+    px: pxValue,
+    rem: pxValue / 16,
   };
 }

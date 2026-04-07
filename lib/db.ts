@@ -1,13 +1,13 @@
 import { neon } from '@neondatabase/serverless';
-import type { ScrapedSite, DesignToken, TokenVersion, TokenMetadata } from './types';
+import type { ScrapedSite, DesignTokens, TokenVersion } from './types';
 
 const sql = neon(process.env.DATABASE_URL!);
 
 // Site Operations
-export async function createSite(url: string, domain: string, title?: string, faviconUrl?: string): Promise<ScrapedSite> {
+export async function createSite(url: string, domain: string, title?: string): Promise<ScrapedSite> {
   const result = await sql`
-    INSERT INTO scraped_sites (url, domain, title, favicon_url)
-    VALUES (${url}, ${domain}, ${title || null}, ${faviconUrl || null})
+    INSERT INTO scraped_sites (url, domain, title, extraction_status)
+    VALUES (${url}, ${domain}, ${title || null}, 'pending')
     RETURNING *
   `;
   return result[0] as ScrapedSite;
@@ -29,20 +29,27 @@ export async function getSiteByUrl(url: string): Promise<ScrapedSite | null> {
 
 export async function getRecentSites(limit = 10): Promise<ScrapedSite[]> {
   const result = await sql`
-    SELECT * FROM scraped_sites 
-    ORDER BY created_at DESC 
+    SELECT s.*, 
+           dt.colors, dt.typography, dt.spacing
+    FROM scraped_sites s
+    LEFT JOIN design_tokens dt ON s.id = dt.site_id
+    WHERE s.extraction_status = 'completed'
+    ORDER BY s.created_at DESC 
     LIMIT ${limit}
   `;
   return result as ScrapedSite[];
 }
 
-export async function updateSite(id: string, updates: Partial<ScrapedSite>): Promise<ScrapedSite> {
+export async function updateSiteStatus(
+  id: string, 
+  status: 'pending' | 'processing' | 'completed' | 'failed',
+  errorMessage?: string
+): Promise<ScrapedSite> {
   const result = await sql`
     UPDATE scraped_sites 
     SET 
-      title = COALESCE(${updates.title || null}, title),
-      favicon_url = COALESCE(${updates.favicon_url || null}, favicon_url),
-      screenshot_url = COALESCE(${updates.screenshot_url || null}, screenshot_url),
+      extraction_status = ${status},
+      error_message = ${errorMessage || null},
       updated_at = NOW()
     WHERE id = ${id}
     RETURNING *
@@ -50,149 +57,152 @@ export async function updateSite(id: string, updates: Partial<ScrapedSite>): Pro
   return result[0] as ScrapedSite;
 }
 
-// Token Operations
-export async function createToken(
-  siteId: string,
-  category: 'color' | 'typography' | 'spacing',
-  name: string,
-  value: string,
-  metadata: TokenMetadata = {}
-): Promise<DesignToken> {
+export async function updateSiteTitle(id: string, title: string): Promise<ScrapedSite> {
   const result = await sql`
-    INSERT INTO design_tokens (site_id, category, name, value, metadata)
-    VALUES (${siteId}, ${category}, ${name}, ${value}, ${JSON.stringify(metadata)})
-    RETURNING *
-  `;
-  return result[0] as DesignToken;
-}
-
-export async function createTokensBatch(
-  tokens: Array<{
-    siteId: string;
-    category: 'color' | 'typography' | 'spacing';
-    name: string;
-    value: string;
-    metadata?: TokenMetadata;
-  }>
-): Promise<DesignToken[]> {
-  if (tokens.length === 0) return [];
-  
-  const results: DesignToken[] = [];
-  for (const token of tokens) {
-    const result = await createToken(
-      token.siteId,
-      token.category,
-      token.name,
-      token.value,
-      token.metadata || {}
-    );
-    results.push(result);
-  }
-  return results;
-}
-
-export async function getTokensBySiteId(siteId: string): Promise<DesignToken[]> {
-  const result = await sql`
-    SELECT dt.*, 
-           CASE WHEN lt.id IS NOT NULL THEN true ELSE false END as is_locked
-    FROM design_tokens dt
-    LEFT JOIN locked_tokens lt ON dt.id = lt.token_id
-    WHERE dt.site_id = ${siteId}
-    ORDER BY dt.category, dt.name
-  `;
-  return result as DesignToken[];
-}
-
-export async function getTokenById(id: string): Promise<DesignToken | null> {
-  const result = await sql`
-    SELECT dt.*, 
-           CASE WHEN lt.id IS NOT NULL THEN true ELSE false END as is_locked
-    FROM design_tokens dt
-    LEFT JOIN locked_tokens lt ON dt.id = lt.token_id
-    WHERE dt.id = ${id}
-  `;
-  return result[0] as DesignToken || null;
-}
-
-export async function updateToken(
-  id: string,
-  value: string,
-  metadata?: Partial<TokenMetadata>
-): Promise<DesignToken> {
-  // Get current token for versioning
-  const current = await getTokenById(id);
-  if (!current) throw new Error('Token not found');
-  
-  // Check if locked
-  if (current.is_locked) {
-    throw new Error('Cannot update locked token');
-  }
-  
-  // Create version record
-  await sql`
-    INSERT INTO token_versions (token_id, previous_value, new_value, previous_metadata, new_metadata)
-    VALUES (
-      ${id}, 
-      ${current.value}, 
-      ${value}, 
-      ${JSON.stringify(current.metadata)}, 
-      ${JSON.stringify(metadata || current.metadata)}
-    )
-  `;
-  
-  // Update token
-  const newMetadata = metadata ? { ...current.metadata, ...metadata } : current.metadata;
-  const result = await sql`
-    UPDATE design_tokens 
-    SET value = ${value}, metadata = ${JSON.stringify(newMetadata)}, updated_at = NOW()
+    UPDATE scraped_sites 
+    SET title = ${title}, updated_at = NOW()
     WHERE id = ${id}
     RETURNING *
   `;
-  
-  return result[0] as DesignToken;
+  return result[0] as ScrapedSite;
 }
 
-export async function deleteToken(id: string): Promise<void> {
-  await sql`DELETE FROM design_tokens WHERE id = ${id}`;
+// Token Operations (using JSONB storage)
+export async function createDesignTokens(
+  siteId: string,
+  tokens: {
+    colors?: object;
+    typography?: object;
+    spacing?: object;
+    shadows?: object;
+    radii?: object;
+  }
+): Promise<DesignTokens> {
+  const result = await sql`
+    INSERT INTO design_tokens (site_id, colors, typography, spacing, shadows, radii)
+    VALUES (
+      ${siteId}, 
+      ${JSON.stringify(tokens.colors || {})},
+      ${JSON.stringify(tokens.typography || {})},
+      ${JSON.stringify(tokens.spacing || {})},
+      ${JSON.stringify(tokens.shadows || {})},
+      ${JSON.stringify(tokens.radii || {})}
+    )
+    RETURNING *
+  `;
+  return result[0] as DesignTokens;
+}
+
+export async function getTokensBySiteId(siteId: string): Promise<DesignTokens | null> {
+  const result = await sql`
+    SELECT * FROM design_tokens WHERE site_id = ${siteId}
+  `;
+  return result[0] as DesignTokens || null;
+}
+
+export async function updateDesignTokens(
+  siteId: string,
+  updates: {
+    colors?: object;
+    typography?: object;
+    spacing?: object;
+    shadows?: object;
+    radii?: object;
+  }
+): Promise<DesignTokens> {
+  // Get current tokens first
+  const current = await getTokensBySiteId(siteId);
+  if (!current) throw new Error('Tokens not found for site');
+
+  const result = await sql`
+    UPDATE design_tokens 
+    SET 
+      colors = ${JSON.stringify(updates.colors || current.colors)},
+      typography = ${JSON.stringify(updates.typography || current.typography)},
+      spacing = ${JSON.stringify(updates.spacing || current.spacing)},
+      shadows = ${JSON.stringify(updates.shadows || current.shadows)},
+      radii = ${JSON.stringify(updates.radii || current.radii)},
+      updated_at = NOW()
+    WHERE site_id = ${siteId}
+    RETURNING *
+  `;
+  
+  return result[0] as DesignTokens;
 }
 
 // Lock Operations
-export async function lockToken(siteId: string, tokenId: string): Promise<void> {
+export async function lockToken(siteId: string, tokenPath: string, value: string): Promise<void> {
   await sql`
-    INSERT INTO locked_tokens (site_id, token_id)
-    VALUES (${siteId}, ${tokenId})
-    ON CONFLICT (token_id) DO NOTHING
+    INSERT INTO locked_tokens (site_id, token_path, locked_value)
+    VALUES (${siteId}, ${tokenPath}, ${value})
+    ON CONFLICT (site_id, token_path) DO UPDATE SET locked_value = ${value}, locked_at = NOW()
   `;
 }
 
-export async function unlockToken(tokenId: string): Promise<void> {
-  await sql`DELETE FROM locked_tokens WHERE token_id = ${tokenId}`;
+export async function unlockToken(siteId: string, tokenPath: string): Promise<void> {
+  await sql`DELETE FROM locked_tokens WHERE site_id = ${siteId} AND token_path = ${tokenPath}`;
 }
 
-export async function getLockedTokenIds(siteId: string): Promise<string[]> {
+export async function getLockedTokens(siteId: string): Promise<Array<{ token_path: string; locked_value: string }>> {
   const result = await sql`
-    SELECT token_id FROM locked_tokens WHERE site_id = ${siteId}
+    SELECT token_path, locked_value FROM locked_tokens WHERE site_id = ${siteId}
   `;
-  return result.map(r => r.token_id as string);
+  return result as Array<{ token_path: string; locked_value: string }>;
+}
+
+export async function isTokenLocked(siteId: string, tokenPath: string): Promise<boolean> {
+  const result = await sql`
+    SELECT 1 FROM locked_tokens WHERE site_id = ${siteId} AND token_path = ${tokenPath}
+  `;
+  return result.length > 0;
 }
 
 // Version Operations
-export async function getTokenVersions(tokenId: string): Promise<TokenVersion[]> {
+export async function createTokenVersion(
+  siteId: string,
+  tokenPath: string,
+  previousValue: string | null,
+  newValue: string,
+  changeType: 'extracted' | 'manual_edit' | 'locked' | 'unlocked'
+): Promise<TokenVersion> {
+  const result = await sql`
+    INSERT INTO token_versions (site_id, token_path, previous_value, new_value, change_type)
+    VALUES (${siteId}, ${tokenPath}, ${previousValue}, ${newValue}, ${changeType})
+    RETURNING *
+  `;
+  return result[0] as TokenVersion;
+}
+
+export async function getTokenVersions(siteId: string, tokenPath?: string): Promise<TokenVersion[]> {
+  if (tokenPath) {
+    const result = await sql`
+      SELECT * FROM token_versions 
+      WHERE site_id = ${siteId} AND token_path = ${tokenPath}
+      ORDER BY created_at DESC
+    `;
+    return result as TokenVersion[];
+  }
+  
   const result = await sql`
     SELECT * FROM token_versions 
-    WHERE token_id = ${tokenId}
+    WHERE site_id = ${siteId}
     ORDER BY created_at DESC
+    LIMIT 50
   `;
   return result as TokenVersion[];
 }
 
-export async function revertToVersion(tokenId: string, versionId: string): Promise<DesignToken> {
-  const version = await sql`
-    SELECT * FROM token_versions WHERE id = ${versionId} AND token_id = ${tokenId}
-  `;
+// Combined site + tokens fetch
+export async function getSiteWithTokens(id: string): Promise<{ site: ScrapedSite; tokens: DesignTokens | null; lockedTokens: string[] } | null> {
+  const site = await getSiteById(id);
+  if (!site) return null;
   
-  if (!version[0]) throw new Error('Version not found');
+  const tokens = await getTokensBySiteId(id);
+  const locked = await getLockedTokens(id);
   
-  const v = version[0] as TokenVersion;
-  return updateToken(tokenId, v.previous_value, v.previous_metadata);
+  return {
+    site,
+    tokens,
+    lockedTokens: locked.map(l => l.token_path)
+  };
 }

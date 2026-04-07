@@ -5,62 +5,104 @@ export interface ScrapedSite {
   url: string;
   domain: string;
   title: string | null;
-  favicon_url: string | null;
-  screenshot_url: string | null;
+  raw_css: string | null;
+  extraction_status: 'pending' | 'processing' | 'completed' | 'failed';
+  error_message: string | null;
   created_at: string;
   updated_at: string;
+  // Joined from design_tokens
+  colors?: ColorTokens;
+  typography?: TypographyTokens;
+  spacing?: SpacingTokens;
 }
 
-export interface DesignToken {
+export interface DesignTokens {
   id: string;
   site_id: string;
-  category: 'color' | 'typography' | 'spacing';
-  name: string;
-  value: string;
-  metadata: TokenMetadata;
-  is_locked: boolean;
+  colors: ColorTokens;
+  typography: TypographyTokens;
+  spacing: SpacingTokens;
+  shadows: ShadowTokens;
+  radii: RadiiTokens;
   created_at: string;
   updated_at: string;
 }
 
-export interface TokenMetadata {
-  // Color metadata
-  hex?: string;
-  rgb?: string;
-  hsl?: string;
+export interface ColorToken {
+  value: string;
+  hex: string;
+  rgb: string;
+  hsl: string;
   contrast_ratio?: number;
   semantic_name?: string;
-  
-  // Typography metadata
-  font_family?: string;
-  font_weight?: string | number;
-  font_size?: string;
-  line_height?: string;
-  letter_spacing?: string;
-  
-  // Spacing metadata
-  px_value?: number;
-  rem_value?: number;
-  
-  // Common
   source?: string;
   occurrences?: number;
 }
 
+export interface ColorTokens {
+  primary: ColorToken[];
+  background: ColorToken[];
+  text: ColorToken[];
+  accent: ColorToken[];
+}
+
+export interface TypographyToken {
+  fontFamily: string;
+  fontSize: string;
+  fontWeight: string | number;
+  lineHeight: string;
+  letterSpacing?: string;
+  source?: string;
+}
+
+export interface TypographyTokens {
+  headings: TypographyToken[];
+  body: TypographyToken[];
+  mono: TypographyToken[];
+}
+
+export interface SpacingToken {
+  value: string;
+  px: number;
+  rem: number;
+  source?: string;
+  occurrences?: number;
+}
+
+export interface SpacingTokens {
+  values: SpacingToken[];
+}
+
+export interface ShadowTokens {
+  values: Array<{
+    value: string;
+    source?: string;
+  }>;
+}
+
+export interface RadiiTokens {
+  values: Array<{
+    value: string;
+    px: number;
+    source?: string;
+  }>;
+}
+
 export interface TokenVersion {
   id: string;
-  token_id: string;
-  previous_value: string;
+  site_id: string;
+  token_path: string;
+  previous_value: string | null;
   new_value: string;
-  previous_metadata: TokenMetadata;
-  new_metadata: TokenMetadata;
+  change_type: 'extracted' | 'manual_edit' | 'locked' | 'unlocked';
   created_at: string;
 }
 
 export interface LockedToken {
   id: string;
   site_id: string;
-  token_id: string;
+  token_path: string;
+  locked_value: string;
   locked_at: string;
 }
 
@@ -70,20 +112,21 @@ export interface ScrapeRequest {
 }
 
 export interface ScrapeResponse {
-  site: ScrapedSite;
-  tokens: DesignToken[];
+  siteId: string;
+  cached: boolean;
+  message?: string;
 }
 
 export interface UpdateTokenRequest {
+  tokenPath: string;
   value: string;
-  metadata?: Partial<TokenMetadata>;
 }
 
 export interface ExportFormat {
   type: 'css' | 'json' | 'tailwind';
 }
 
-// Extraction Types
+// Extraction Types (intermediate format before saving to DB)
 export interface ExtractedColors {
   primary: string[];
   background: string[];

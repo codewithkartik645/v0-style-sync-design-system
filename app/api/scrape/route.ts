@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scrapeWebsite, getDomainFromUrl, normalizeUrl } from '@/lib/scraper';
-import { createSite, createTokensBatch, getSiteByUrl } from '@/lib/db';
+import { createSite, createDesignTokens, getSiteByUrl, updateSiteStatus, updateSiteTitle } from '@/lib/db';
 import { generateColorMetadata } from '@/lib/extractors/colors';
 import { generateTypographyMetadata } from '@/lib/extractors/typography';
 import { generateSpacingMetadata } from '@/lib/extractors/spacing';
+import type { ColorTokens, TypographyTokens, SpacingTokens } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     
     // Check if we've already scraped this URL
     const existingSite = await getSiteByUrl(normalizedUrl);
-    if (existingSite) {
+    if (existingSite && existingSite.extraction_status === 'completed') {
       return NextResponse.json({
         siteId: existingSite.id,
         cached: true,
@@ -38,118 +39,89 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Scrape the website
-    const extraction = await scrapeWebsite(normalizedUrl);
+    // Create site record first (without favicon)
     const domain = getDomainFromUrl(normalizedUrl);
+    const site = await createSite(normalizedUrl, domain);
     
-    // Create site record
-    const site = await createSite(
-      normalizedUrl,
-      domain,
-      extraction.title,
-      extraction.favicon
-    );
-    
-    // Prepare tokens for batch insert
-    const tokens: Array<{
-      siteId: string;
-      category: 'color' | 'typography' | 'spacing';
-      name: string;
-      value: string;
-      metadata?: Record<string, unknown>;
-    }> = [];
-    
-    // Add color tokens
-    extraction.colors.primary.forEach((color, i) => {
-      tokens.push({
-        siteId: site.id,
-        category: 'color',
-        name: `primary-${i + 1}`,
-        value: color,
-        metadata: generateColorMetadata(color),
+    try {
+      // Update status to processing
+      await updateSiteStatus(site.id, 'processing');
+      
+      // Scrape the website
+      const extraction = await scrapeWebsite(normalizedUrl);
+      
+      // Update title if found
+      if (extraction.title) {
+        await updateSiteTitle(site.id, extraction.title);
+      }
+      
+      // Transform extraction data into JSONB format
+      const colors: ColorTokens = {
+        primary: extraction.colors.primary.map(color => ({
+          value: color,
+          ...generateColorMetadata(color),
+        })),
+        background: extraction.colors.background.map(color => ({
+          value: color,
+          ...generateColorMetadata(color),
+        })),
+        text: extraction.colors.text.map(color => ({
+          value: color,
+          ...generateColorMetadata(color),
+        })),
+        accent: extraction.colors.accent.map(color => ({
+          value: color,
+          ...generateColorMetadata(color),
+        })),
+      };
+      
+      const typography: TypographyTokens = {
+        headings: extraction.typography.headings.map(style => ({
+          ...style,
+          ...generateTypographyMetadata(style),
+        })),
+        body: extraction.typography.body.map(style => ({
+          ...style,
+          ...generateTypographyMetadata(style),
+        })),
+        mono: extraction.typography.mono.map(style => ({
+          ...style,
+          ...generateTypographyMetadata(style),
+        })),
+      };
+      
+      const spacing: SpacingTokens = {
+        values: extraction.spacing.values.map(value => ({
+          value: `${value}px`,
+          ...generateSpacingMetadata(value),
+        })),
+      };
+      
+      // Create design tokens record
+      await createDesignTokens(site.id, {
+        colors,
+        typography,
+        spacing,
       });
-    });
-    
-    extraction.colors.background.forEach((color, i) => {
-      tokens.push({
+      
+      // Update status to completed
+      await updateSiteStatus(site.id, 'completed');
+      
+      return NextResponse.json({
         siteId: site.id,
-        category: 'color',
-        name: `background-${i + 1}`,
-        value: color,
-        metadata: generateColorMetadata(color),
+        cached: false,
+        message: 'Extraction complete',
       });
-    });
-    
-    extraction.colors.text.forEach((color, i) => {
-      tokens.push({
-        siteId: site.id,
-        category: 'color',
-        name: `text-${i + 1}`,
-        value: color,
-        metadata: generateColorMetadata(color),
-      });
-    });
-    
-    extraction.colors.accent.forEach((color, i) => {
-      tokens.push({
-        siteId: site.id,
-        category: 'color',
-        name: `accent-${i + 1}`,
-        value: color,
-        metadata: generateColorMetadata(color),
-      });
-    });
-    
-    // Add typography tokens
-    extraction.typography.headings.forEach((style, i) => {
-      tokens.push({
-        siteId: site.id,
-        category: 'typography',
-        name: `heading-${i + 1}`,
-        value: style.fontFamily,
-        metadata: generateTypographyMetadata(style),
-      });
-    });
-    
-    extraction.typography.body.forEach((style, i) => {
-      tokens.push({
-        siteId: site.id,
-        category: 'typography',
-        name: `body-${i + 1}`,
-        value: style.fontFamily,
-        metadata: generateTypographyMetadata(style),
-      });
-    });
-    
-    extraction.typography.mono.forEach((style, i) => {
-      tokens.push({
-        siteId: site.id,
-        category: 'typography',
-        name: `mono-${i + 1}`,
-        value: style.fontFamily,
-        metadata: generateTypographyMetadata(style),
-      });
-    });
-    
-    // Add spacing tokens
-    extraction.spacing.values.forEach((value, i) => {
-      tokens.push({
-        siteId: site.id,
-        category: 'spacing',
-        name: `space-${i + 1}`,
-        value: `${value}px`,
-        metadata: generateSpacingMetadata(value),
-      });
-    });
-    
-    // Batch insert tokens
-    await createTokensBatch(tokens);
-    
-    return NextResponse.json({
-      siteId: site.id,
-      cached: false,
-      tokensCreated: tokens.length,
-    });
+      
+    } catch (extractionError) {
+      // Update status to failed
+      await updateSiteStatus(
+        site.id, 
+        'failed', 
+        extractionError instanceof Error ? extractionError.message : 'Unknown error'
+      );
+      throw extractionError;
+    }
     
   } catch (error) {
     console.error('Scrape error:', error);
