@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
-import type { ScrapedSite, DesignToken } from '@/lib/types';
+import type { ScrapedSite, DesignTokens, ColorToken, TypographyToken, SpacingToken } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { ColorTokenCard } from '@/components/token-editors/color-token-card';
 import { TypographyTokenCard } from '@/components/token-editors/typography-token-card';
@@ -15,7 +15,62 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 interface Props {
   initialSite: ScrapedSite;
-  initialTokens: DesignToken[];
+  initialTokens: DesignTokens | null;
+}
+
+// Helper to flatten color tokens from JSONB structure
+function flattenColorTokens(colors: DesignTokens['colors'] | undefined, lockedPaths: Set<string>) {
+  if (!colors) return [];
+  const result: Array<{ path: string; category: string; token: ColorToken; isLocked: boolean }> = [];
+  
+  for (const [category, tokens] of Object.entries(colors)) {
+    if (Array.isArray(tokens)) {
+      tokens.forEach((token, index) => {
+        const path = `colors.${category}.${index}`;
+        result.push({
+          path,
+          category,
+          token,
+          isLocked: lockedPaths.has(path),
+        });
+      });
+    }
+  }
+  return result;
+}
+
+// Helper to flatten typography tokens
+function flattenTypographyTokens(typography: DesignTokens['typography'] | undefined, lockedPaths: Set<string>) {
+  if (!typography) return [];
+  const result: Array<{ path: string; category: string; token: TypographyToken; isLocked: boolean }> = [];
+  
+  for (const [category, tokens] of Object.entries(typography)) {
+    if (Array.isArray(tokens)) {
+      tokens.forEach((token, index) => {
+        const path = `typography.${category}.${index}`;
+        result.push({
+          path,
+          category,
+          token,
+          isLocked: lockedPaths.has(path),
+        });
+      });
+    }
+  }
+  return result;
+}
+
+// Helper to flatten spacing tokens
+function flattenSpacingTokens(spacing: DesignTokens['spacing'] | undefined, lockedPaths: Set<string>) {
+  if (!spacing?.values) return [];
+  return spacing.values.map((token, index) => {
+    const path = `spacing.values.${index}`;
+    return {
+      path,
+      token,
+      isLocked: lockedPaths.has(path),
+    };
+  });
 }
 
 export function DashboardClient({ initialSite, initialTokens }: Props) {
@@ -23,54 +78,100 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
   const [activeCategory, setActiveCategory] = useState<'all' | 'color' | 'typography' | 'spacing'>('all');
   const [isExportOpen, setIsExportOpen] = useState(false);
   
-  const { data, mutate } = useSWR<{ site: ScrapedSite; tokens: DesignToken[] }>(
+  const { data, mutate } = useSWR<{ site: ScrapedSite; tokens: DesignTokens | null; lockedTokens?: string[] }>(
     `/api/sites/${initialSite.id}`,
     fetcher,
-    { fallbackData: { site: initialSite, tokens: initialTokens } }
+    { fallbackData: { site: initialSite, tokens: initialTokens, lockedTokens: [] } }
   );
   
   const site = data?.site || initialSite;
   const tokens = data?.tokens || initialTokens;
+  const lockedPaths = useMemo(() => new Set(data?.lockedTokens || []), [data?.lockedTokens]);
   
-  const colorTokens = useMemo(() => tokens.filter(t => t.category === 'color'), [tokens]);
-  const typographyTokens = useMemo(() => tokens.filter(t => t.category === 'typography'), [tokens]);
-  const spacingTokens = useMemo(() => tokens.filter(t => t.category === 'spacing'), [tokens]);
+  // Flatten tokens for display
+  const colorTokens = useMemo(
+    () => flattenColorTokens(tokens?.colors, lockedPaths),
+    [tokens?.colors, lockedPaths]
+  );
   
-  const filteredTokens = useMemo(() => {
-    if (activeCategory === 'all') return tokens;
-    return tokens.filter(t => t.category === activeCategory);
-  }, [tokens, activeCategory]);
+  const typographyTokens = useMemo(
+    () => flattenTypographyTokens(tokens?.typography, lockedPaths),
+    [tokens?.typography, lockedPaths]
+  );
+  
+  const spacingTokens = useMemo(
+    () => flattenSpacingTokens(tokens?.spacing, lockedPaths),
+    [tokens?.spacing, lockedPaths]
+  );
+  
+  const totalTokens = colorTokens.length + typographyTokens.length + spacingTokens.length;
   
   // Generate CSS variables for preview
   const cssVariables = useMemo(() => {
     const vars: Record<string, string> = {};
-    for (const token of tokens) {
-      vars[`--extracted-${token.name}`] = token.value;
-      if (token.category === 'typography' && token.metadata) {
-        if (token.metadata.font_size) vars[`--extracted-${token.name}-size`] = token.metadata.font_size;
-        if (token.metadata.font_weight) vars[`--extracted-${token.name}-weight`] = String(token.metadata.font_weight);
-        if (token.metadata.line_height) vars[`--extracted-${token.name}-line-height`] = token.metadata.line_height;
-      }
-    }
+    
+    // Color variables
+    colorTokens.forEach(({ path, token }) => {
+      const name = path.replace(/\./g, '-');
+      vars[`--extracted-${name}`] = token.value;
+    });
+    
+    // Typography variables
+    typographyTokens.forEach(({ path, token }) => {
+      const name = path.replace(/\./g, '-');
+      vars[`--extracted-${name}-family`] = token.fontFamily;
+      vars[`--extracted-${name}-size`] = token.fontSize;
+      vars[`--extracted-${name}-weight`] = String(token.fontWeight);
+      vars[`--extracted-${name}-line-height`] = token.lineHeight;
+    });
+    
+    // Spacing variables
+    spacingTokens.forEach(({ path, token }) => {
+      const name = path.replace(/\./g, '-');
+      vars[`--extracted-${name}`] = token.value;
+    });
+    
     return vars;
-  }, [tokens]);
+  }, [colorTokens, typographyTokens, spacingTokens]);
   
-  async function handleTokenUpdate(tokenId: string, value: string, metadata?: Record<string, unknown>) {
-    await fetch(`/api/tokens/${tokenId}`, {
+  async function handleTokenUpdate(tokenPath: string, value: string) {
+    await fetch(`/api/tokens/${initialSite.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value, metadata }),
+      body: JSON.stringify({ tokenPath, value }),
     });
     mutate();
   }
   
-  async function handleToggleLock(tokenId: string, isLocked: boolean) {
+  async function handleToggleLock(tokenPath: string, isLocked: boolean, value: string) {
     if (isLocked) {
-      await fetch(`/api/tokens/${tokenId}/lock`, { method: 'DELETE' });
+      await fetch(`/api/tokens/${initialSite.id}/lock`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokenPath }),
+      });
     } else {
-      await fetch(`/api/tokens/${tokenId}/lock`, { method: 'POST' });
+      await fetch(`/api/tokens/${initialSite.id}/lock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokenPath, value }),
+      });
     }
     mutate();
+  }
+
+  if (!tokens) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">No tokens found</h2>
+          <p className="mt-2 text-muted-foreground">This site hasn&apos;t been analyzed yet.</p>
+          <Link href="/" className="mt-4 inline-block text-primary hover:underline">
+            Go back home
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -84,15 +185,9 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
               <span className="text-sm">Back</span>
             </Link>
             <div className="h-6 w-px bg-border" />
-            <div className="flex items-center gap-3">
-              {site.favicon_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={site.favicon_url} alt="" className="size-6 rounded" />
-              )}
-              <div>
-                <h1 className="font-semibold">{site.title || site.domain}</h1>
-                <p className="text-xs text-muted-foreground">{site.url}</p>
-              </div>
+            <div>
+              <h1 className="font-semibold">{site.title || site.domain}</h1>
+              <p className="text-xs text-muted-foreground">{site.url}</p>
             </div>
           </div>
           
@@ -134,7 +229,7 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
           <div className="mb-8 flex items-center gap-2">
             <CategoryPill
               label="All"
-              count={tokens.length}
+              count={totalTokens}
               isActive={activeCategory === 'all'}
               onClick={() => setActiveCategory('all')}
             />
@@ -160,44 +255,48 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
           
           {/* Token Grid */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredTokens.map((token) => {
-              if (token.category === 'color') {
-                return (
-                  <ColorTokenCard
-                    key={token.id}
-                    token={token}
-                    onUpdate={(value, metadata) => handleTokenUpdate(token.id, value, metadata)}
-                    onToggleLock={() => handleToggleLock(token.id, token.is_locked)}
-                  />
-                );
-              }
-              if (token.category === 'typography') {
-                return (
-                  <TypographyTokenCard
-                    key={token.id}
-                    token={token}
-                    onUpdate={(value, metadata) => handleTokenUpdate(token.id, value, metadata)}
-                    onToggleLock={() => handleToggleLock(token.id, token.is_locked)}
-                  />
-                );
-              }
-              if (token.category === 'spacing') {
-                return (
-                  <SpacingTokenCard
-                    key={token.id}
-                    token={token}
-                    onUpdate={(value, metadata) => handleTokenUpdate(token.id, value, metadata)}
-                    onToggleLock={() => handleToggleLock(token.id, token.is_locked)}
-                  />
-                );
-              }
-              return null;
-            })}
+            {(activeCategory === 'all' || activeCategory === 'color') &&
+              colorTokens.map(({ path, category, token, isLocked }) => (
+                <ColorTokenCard
+                  key={path}
+                  tokenPath={path}
+                  category={category}
+                  token={token}
+                  isLocked={isLocked}
+                  onUpdate={(value) => handleTokenUpdate(path, value)}
+                  onToggleLock={() => handleToggleLock(path, isLocked, token.value)}
+                />
+              ))}
+            
+            {(activeCategory === 'all' || activeCategory === 'typography') &&
+              typographyTokens.map(({ path, category, token, isLocked }) => (
+                <TypographyTokenCard
+                  key={path}
+                  tokenPath={path}
+                  category={category}
+                  token={token}
+                  isLocked={isLocked}
+                  onUpdate={(value) => handleTokenUpdate(path, value)}
+                  onToggleLock={() => handleToggleLock(path, isLocked, token.fontFamily)}
+                />
+              ))}
+            
+            {(activeCategory === 'all' || activeCategory === 'spacing') &&
+              spacingTokens.map(({ path, token, isLocked }) => (
+                <SpacingTokenCard
+                  key={path}
+                  tokenPath={path}
+                  token={token}
+                  isLocked={isLocked}
+                  onUpdate={(value) => handleTokenUpdate(path, value)}
+                  onToggleLock={() => handleToggleLock(path, isLocked, token.value)}
+                />
+              ))}
           </div>
           
-          {filteredTokens.length === 0 && (
+          {totalTokens === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-muted-foreground">No tokens found in this category.</p>
+              <p className="text-muted-foreground">No tokens extracted yet.</p>
             </div>
           )}
         </div>

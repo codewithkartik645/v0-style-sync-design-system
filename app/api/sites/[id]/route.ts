@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSiteById, getTokensBySiteId } from '@/lib/db';
+import { getSiteWithTokens } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
@@ -8,17 +8,15 @@ export async function GET(
   try {
     const { id } = await params;
     
-    const site = await getSiteById(id);
-    if (!site) {
+    const result = await getSiteWithTokens(id);
+    if (!result) {
       return NextResponse.json(
         { error: 'Site not found' },
         { status: 404 }
       );
     }
     
-    const tokens = await getTokensBySiteId(id);
-    
-    return NextResponse.json({ site, tokens });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Failed to fetch site:', error);
     return NextResponse.json(

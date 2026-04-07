@@ -1,31 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import type { DesignToken } from '@/lib/types';
+import type { ColorToken } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 
 interface Props {
-  token: DesignToken;
-  onUpdate: (value: string, metadata?: Record<string, unknown>) => void;
+  tokenPath: string;
+  category: string;
+  token: ColorToken;
+  isLocked: boolean;
+  onUpdate: (value: string) => void;
   onToggleLock: () => void;
 }
 
-export function ColorTokenCard({ token, onUpdate, onToggleLock }: Props) {
+export function ColorTokenCard({ tokenPath, category, token, isLocked, onUpdate, onToggleLock }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(token.value);
   
   const handleSave = () => {
     if (tempValue !== token.value) {
-      onUpdate(tempValue, {
-        hex: tempValue,
-        // Could recalculate rgb/hsl here if needed
-      });
+      onUpdate(tempValue);
     }
     setIsEditing(false);
   };
   
-  const contrastRatio = token.metadata?.contrast_ratio as number | undefined;
-  const semanticName = token.metadata?.semantic_name as string | undefined;
+  // Generate display name from path
+  const displayName = tokenPath.split('.').pop() || tokenPath;
   
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-primary/20 hover:shadow-md">
@@ -39,33 +39,33 @@ export function ColorTokenCard({ token, onUpdate, onToggleLock }: Props) {
       <button
         onClick={onToggleLock}
         className={`absolute right-3 top-3 rounded-full p-2 transition-all ${
-          token.is_locked
+          isLocked
             ? 'bg-primary text-primary-foreground'
             : 'bg-background/80 text-muted-foreground hover:bg-background hover:text-foreground'
         }`}
-        title={token.is_locked ? 'Unlock token' : 'Lock token'}
+        title={isLocked ? 'Unlock token' : 'Lock token'}
       >
-        {token.is_locked ? <LockIcon className="size-4" /> : <UnlockIcon className="size-4" />}
+        {isLocked ? <LockIcon className="size-4" /> : <UnlockIcon className="size-4" />}
       </button>
       
       {/* Content */}
       <div className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="font-medium">{token.name}</h3>
-            {semanticName && (
-              <p className="text-xs text-muted-foreground capitalize">{semanticName}</p>
+            <h3 className="font-medium capitalize">{category}</h3>
+            {token.semantic_name && (
+              <p className="text-xs text-muted-foreground capitalize">{token.semantic_name}</p>
             )}
           </div>
-          {contrastRatio && (
+          {token.contrast_ratio && (
             <div className={`rounded-full px-2 py-1 text-xs font-medium ${
-              contrastRatio >= 4.5 
+              token.contrast_ratio >= 4.5 
                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                : contrastRatio >= 3
+                : token.contrast_ratio >= 3
                 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                 : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
             }`}>
-              {contrastRatio.toFixed(2)}:1
+              {token.contrast_ratio.toFixed(2)}:1
             </div>
           )}
         </div>
@@ -83,7 +83,7 @@ export function ColorTokenCard({ token, onUpdate, onToggleLock }: Props) {
               value={tempValue}
               onChange={(e) => setTempValue(e.target.value)}
               className="flex-1 font-mono text-sm"
-              disabled={token.is_locked}
+              disabled={isLocked}
             />
             <button
               onClick={handleSave}
@@ -103,26 +103,31 @@ export function ColorTokenCard({ token, onUpdate, onToggleLock }: Props) {
           </div>
         ) : (
           <button
-            onClick={() => !token.is_locked && setIsEditing(true)}
+            onClick={() => !isLocked && setIsEditing(true)}
             className={`flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-left font-mono text-sm transition-colors ${
-              token.is_locked
+              isLocked
                 ? 'cursor-not-allowed opacity-50'
                 : 'hover:border-primary/50 hover:bg-accent'
             }`}
-            disabled={token.is_locked}
+            disabled={isLocked}
           >
             <div 
               className="size-4 rounded border border-border/50"
               style={{ backgroundColor: token.value }}
             />
-            <span>{token.value}</span>
+            <span>{token.hex || token.value}</span>
           </button>
         )}
         
         {/* Additional metadata */}
-        {token.metadata?.rgb && (
+        {token.rgb && (
           <p className="mt-2 font-mono text-xs text-muted-foreground">
-            {token.metadata.rgb as string}
+            {token.rgb}
+          </p>
+        )}
+        {token.occurrences && token.occurrences > 1 && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Used {token.occurrences} times
           </p>
         )}
       </div>

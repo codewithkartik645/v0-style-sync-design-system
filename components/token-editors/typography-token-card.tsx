@@ -1,35 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import type { DesignToken } from '@/lib/types';
+import type { TypographyToken } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 
 interface Props {
-  token: DesignToken;
-  onUpdate: (value: string, metadata?: Record<string, unknown>) => void;
+  tokenPath: string;
+  category: string;
+  token: TypographyToken;
+  isLocked: boolean;
+  onUpdate: (value: string) => void;
   onToggleLock: () => void;
 }
 
-export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
+export function TypographyTokenCard({ tokenPath, category, token, isLocked, onUpdate, onToggleLock }: Props) {
   const [isEditing, setIsEditing] = useState(false);
-  const [tempValue, setTempValue] = useState(token.value);
-  const [tempSize, setTempSize] = useState(token.metadata?.font_size as string || '1rem');
-  const [tempWeight, setTempWeight] = useState(token.metadata?.font_weight as string || '400');
-  const [tempLineHeight, setTempLineHeight] = useState(token.metadata?.line_height as string || '1.5');
+  const [tempFamily, setTempFamily] = useState(token.fontFamily);
+  const [tempSize, setTempSize] = useState(token.fontSize);
+  const [tempWeight, setTempWeight] = useState(String(token.fontWeight));
+  const [tempLineHeight, setTempLineHeight] = useState(token.lineHeight);
   
   const handleSave = () => {
-    onUpdate(tempValue, {
-      font_family: tempValue,
-      font_size: tempSize,
-      font_weight: tempWeight,
-      line_height: tempLineHeight,
-    });
+    // For now, just update the font family as the main value
+    onUpdate(tempFamily);
     setIsEditing(false);
   };
-  
-  const fontSize = token.metadata?.font_size as string;
-  const fontWeight = token.metadata?.font_weight as string;
-  const lineHeight = token.metadata?.line_height as string;
   
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-primary/20 hover:shadow-md">
@@ -40,10 +35,10 @@ export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
         <span
           className="text-2xl truncate max-w-full"
           style={{
-            fontFamily: token.value,
-            fontSize: fontSize || '1.5rem',
-            fontWeight: fontWeight || '400',
-            lineHeight: lineHeight || '1.2',
+            fontFamily: token.fontFamily,
+            fontSize: token.fontSize || '1.5rem',
+            fontWeight: token.fontWeight || '400',
+            lineHeight: token.lineHeight || '1.2',
           }}
         >
           The quick brown fox
@@ -54,21 +49,21 @@ export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
       <button
         onClick={onToggleLock}
         className={`absolute right-3 top-3 rounded-full p-2 transition-all ${
-          token.is_locked
+          isLocked
             ? 'bg-primary text-primary-foreground'
             : 'bg-background/80 text-muted-foreground hover:bg-background hover:text-foreground'
         }`}
-        title={token.is_locked ? 'Unlock token' : 'Lock token'}
+        title={isLocked ? 'Unlock token' : 'Lock token'}
       >
-        {token.is_locked ? <LockIcon className="size-4" /> : <UnlockIcon className="size-4" />}
+        {isLocked ? <LockIcon className="size-4" /> : <UnlockIcon className="size-4" />}
       </button>
       
       {/* Content */}
       <div className="p-4">
         <div className="mb-3">
-          <h3 className="font-medium capitalize">{token.name.replace(/-/g, ' ')}</h3>
-          <p className="text-sm text-muted-foreground truncate" title={token.value}>
-            {token.value}
+          <h3 className="font-medium capitalize">{category}</h3>
+          <p className="text-sm text-muted-foreground truncate" title={token.fontFamily}>
+            {token.fontFamily}
           </p>
         </div>
         
@@ -78,10 +73,10 @@ export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
               <label className="mb-1 block text-xs text-muted-foreground">Font Family</label>
               <Input
                 type="text"
-                value={tempValue}
-                onChange={(e) => setTempValue(e.target.value)}
+                value={tempFamily}
+                onChange={(e) => setTempFamily(e.target.value)}
                 className="font-mono text-sm"
-                disabled={token.is_locked}
+                disabled={isLocked}
               />
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -92,7 +87,7 @@ export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
                   value={tempSize}
                   onChange={(e) => setTempSize(e.target.value)}
                   className="font-mono text-sm"
-                  disabled={token.is_locked}
+                  disabled={isLocked}
                 />
               </div>
               <div>
@@ -101,7 +96,7 @@ export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
                   value={tempWeight}
                   onChange={(e) => setTempWeight(e.target.value)}
                   className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                  disabled={token.is_locked}
+                  disabled={isLocked}
                 >
                   <option value="100">100</option>
                   <option value="200">200</option>
@@ -121,17 +116,17 @@ export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
                   value={tempLineHeight}
                   onChange={(e) => setTempLineHeight(e.target.value)}
                   className="font-mono text-sm"
-                  disabled={token.is_locked}
+                  disabled={isLocked}
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
-                  setTempValue(token.value);
-                  setTempSize(token.metadata?.font_size as string || '1rem');
-                  setTempWeight(token.metadata?.font_weight as string || '400');
-                  setTempLineHeight(token.metadata?.line_height as string || '1.5');
+                  setTempFamily(token.fontFamily);
+                  setTempSize(token.fontSize);
+                  setTempWeight(String(token.fontWeight));
+                  setTempLineHeight(token.lineHeight);
                   setIsEditing(false);
                 }}
                 className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
@@ -149,30 +144,30 @@ export function TypographyTokenCard({ token, onUpdate, onToggleLock }: Props) {
         ) : (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
-              {fontSize && (
+              {token.fontSize && (
                 <span className="rounded-md bg-muted px-2 py-1 text-xs">
-                  Size: {fontSize}
+                  Size: {token.fontSize}
                 </span>
               )}
-              {fontWeight && (
+              {token.fontWeight && (
                 <span className="rounded-md bg-muted px-2 py-1 text-xs">
-                  Weight: {fontWeight}
+                  Weight: {token.fontWeight}
                 </span>
               )}
-              {lineHeight && (
+              {token.lineHeight && (
                 <span className="rounded-md bg-muted px-2 py-1 text-xs">
-                  Line: {lineHeight}
+                  Line: {token.lineHeight}
                 </span>
               )}
             </div>
             <button
-              onClick={() => !token.is_locked && setIsEditing(true)}
+              onClick={() => !isLocked && setIsEditing(true)}
               className={`w-full rounded-md border border-border px-3 py-2 text-left text-sm transition-colors ${
-                token.is_locked
+                isLocked
                   ? 'cursor-not-allowed opacity-50'
                   : 'hover:border-primary/50 hover:bg-accent'
               }`}
-              disabled={token.is_locked}
+              disabled={isLocked}
             >
               Edit Typography
             </button>

@@ -1,35 +1,28 @@
 'use client';
 
 import { useState } from 'react';
-import type { DesignToken } from '@/lib/types';
+import type { SpacingToken } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 
 interface Props {
-  token: DesignToken;
-  onUpdate: (value: string, metadata?: Record<string, unknown>) => void;
+  tokenPath: string;
+  token: SpacingToken;
+  isLocked: boolean;
+  onUpdate: (value: string) => void;
   onToggleLock: () => void;
 }
 
-export function SpacingTokenCard({ token, onUpdate, onToggleLock }: Props) {
+export function SpacingTokenCard({ tokenPath, token, isLocked, onUpdate, onToggleLock }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(token.value);
   
   const handleSave = () => {
-    const pxMatch = tempValue.match(/(\d+)/);
-    const pxValue = pxMatch ? parseInt(pxMatch[1]) : 0;
-    
-    onUpdate(tempValue, {
-      px_value: pxValue,
-      rem_value: pxValue / 16,
-    });
+    onUpdate(tempValue);
     setIsEditing(false);
   };
   
-  const pxValue = token.metadata?.px_value as number;
-  const remValue = token.metadata?.rem_value as number;
-  
   // Calculate visual width (capped for display)
-  const visualWidth = Math.min(pxValue || parseInt(token.value) || 16, 200);
+  const visualWidth = Math.min(token.px || parseInt(token.value) || 16, 200);
   
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-primary/20 hover:shadow-md">
@@ -51,27 +44,27 @@ export function SpacingTokenCard({ token, onUpdate, onToggleLock }: Props) {
       <button
         onClick={onToggleLock}
         className={`absolute right-3 top-3 rounded-full p-2 transition-all ${
-          token.is_locked
+          isLocked
             ? 'bg-primary text-primary-foreground'
             : 'bg-background/80 text-muted-foreground hover:bg-background hover:text-foreground'
         }`}
-        title={token.is_locked ? 'Unlock token' : 'Lock token'}
+        title={isLocked ? 'Unlock token' : 'Lock token'}
       >
-        {token.is_locked ? <LockIcon className="size-4" /> : <UnlockIcon className="size-4" />}
+        {isLocked ? <LockIcon className="size-4" /> : <UnlockIcon className="size-4" />}
       </button>
       
       {/* Content */}
       <div className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="font-medium">{token.name}</h3>
-            <p className="text-sm text-muted-foreground">Spacing value</p>
+            <h3 className="font-medium">Spacing</h3>
+            <p className="text-sm text-muted-foreground">Value #{tokenPath.split('.').pop()}</p>
           </div>
           <div className="text-right">
             <p className="font-mono text-lg font-semibold">{token.value}</p>
-            {remValue !== undefined && (
+            {token.rem !== undefined && (
               <p className="font-mono text-xs text-muted-foreground">
-                {remValue.toFixed(3)}rem
+                {token.rem.toFixed(3)}rem
               </p>
             )}
           </div>
@@ -85,7 +78,7 @@ export function SpacingTokenCard({ token, onUpdate, onToggleLock }: Props) {
               onChange={(e) => setTempValue(e.target.value)}
               className="flex-1 font-mono text-sm"
               placeholder="e.g., 16px or 1rem"
-              disabled={token.is_locked}
+              disabled={isLocked}
             />
             <button
               onClick={handleSave}
@@ -111,7 +104,7 @@ export function SpacingTokenCard({ token, onUpdate, onToggleLock }: Props) {
                 <div
                   key={size}
                   className={`h-2 rounded transition-colors ${
-                    pxValue === size ? 'bg-primary' : 'bg-muted'
+                    token.px === size ? 'bg-primary' : 'bg-muted'
                   }`}
                   style={{ width: size }}
                   title={`${size}px`}
@@ -119,17 +112,23 @@ export function SpacingTokenCard({ token, onUpdate, onToggleLock }: Props) {
               ))}
             </div>
             <button
-              onClick={() => !token.is_locked && setIsEditing(true)}
+              onClick={() => !isLocked && setIsEditing(true)}
               className={`w-full rounded-md border border-border px-3 py-2 text-left text-sm transition-colors ${
-                token.is_locked
+                isLocked
                   ? 'cursor-not-allowed opacity-50'
                   : 'hover:border-primary/50 hover:bg-accent'
               }`}
-              disabled={token.is_locked}
+              disabled={isLocked}
             >
               Edit Spacing
             </button>
           </div>
+        )}
+        
+        {token.occurrences && token.occurrences > 1 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Used {token.occurrences} times
+          </p>
         )}
       </div>
     </div>

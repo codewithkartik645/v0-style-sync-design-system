@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getSiteById, getTokensBySiteId } from '@/lib/db';
+import { getSiteWithTokens } from '@/lib/db';
 import { DashboardClient } from '@/components/dashboard-client';
 
 interface Props {
@@ -9,12 +9,10 @@ interface Props {
 export default async function DashboardPage({ params }: Props) {
   const { id } = await params;
   
-  const site = await getSiteById(id);
-  if (!site) {
+  const result = await getSiteWithTokens(id);
+  if (!result) {
     notFound();
   }
   
-  const tokens = await getTokensBySiteId(id);
-  
-  return <DashboardClient initialSite={site} initialTokens={tokens} />;
+  return <DashboardClient initialSite={result.site} initialTokens={result.tokens} />;
 }

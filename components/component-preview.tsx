@@ -1,33 +1,41 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { DesignToken } from '@/lib/types';
+import type { DesignTokens } from '@/lib/types';
 
 interface Props {
-  tokens: DesignToken[];
+  tokens: DesignTokens;
 }
 
 export function ComponentPreview({ tokens }: Props) {
-  const colorTokens = useMemo(() => tokens.filter(t => t.category === 'color'), [tokens]);
-  const typographyTokens = useMemo(() => tokens.filter(t => t.category === 'typography'), [tokens]);
-  const spacingTokens = useMemo(() => tokens.filter(t => t.category === 'spacing'), [tokens]);
+  // Get primary colors from the JSONB structure
+  const primaryColor = tokens.colors?.primary?.[0]?.value || '#000000';
+  const backgroundColor = tokens.colors?.background?.[0]?.value || '#ffffff';
+  const textColor = tokens.colors?.text?.[0]?.value || '#000000';
+  const accentColor = tokens.colors?.accent?.[0]?.value || primaryColor;
   
-  // Get primary colors
-  const primaryColor = colorTokens.find(t => t.name.includes('primary'))?.value || '#000000';
-  const backgroundColor = colorTokens.find(t => t.name.includes('background'))?.value || '#ffffff';
-  const textColor = colorTokens.find(t => t.name.includes('text'))?.value || '#000000';
-  const accentColor = colorTokens.find(t => t.name.includes('accent'))?.value || primaryColor;
+  // Get all colors for palette display
+  const allColors = useMemo(() => {
+    const colors: Array<{ name: string; value: string }> = [];
+    if (tokens.colors) {
+      for (const [category, list] of Object.entries(tokens.colors)) {
+        if (Array.isArray(list)) {
+          list.forEach((c, i) => {
+            colors.push({ name: `${category}-${i}`, value: c.value });
+          });
+        }
+      }
+    }
+    return colors;
+  }, [tokens.colors]);
   
   // Get typography
-  const headingFont = typographyTokens.find(t => t.name.includes('heading'))?.value || 'system-ui';
-  const bodyFont = typographyTokens.find(t => t.name.includes('body'))?.value || 'system-ui';
-  const monoFont = typographyTokens.find(t => t.name.includes('mono'))?.value || 'monospace';
+  const headingFont = tokens.typography?.headings?.[0]?.fontFamily || 'system-ui';
+  const bodyFont = tokens.typography?.body?.[0]?.fontFamily || 'system-ui';
+  const monoFont = tokens.typography?.mono?.[0]?.fontFamily || 'monospace';
   
-  // Get spacing
-  const spacing = spacingTokens.map(t => t.metadata?.px_value as number || parseInt(t.value)).filter(Boolean);
-  const smallSpace = spacing[0] || 8;
-  const mediumSpace = spacing[Math.floor(spacing.length / 2)] || 16;
-  const largeSpace = spacing[spacing.length - 1] || 32;
+  // Get spacing values
+  const spacingValues = tokens.spacing?.values || [];
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -93,7 +101,7 @@ export function ComponentPreview({ tokens }: Props) {
               className="inline-block rounded px-2 py-1 text-sm"
               style={{ fontFamily: monoFont, backgroundColor: `${textColor}10`, color: textColor }}
             >
-              const code = &quot;monospace&quot;;
+              {"const code = \"monospace\";"}
             </code>
           </div>
         </PreviewCard>
@@ -203,10 +211,10 @@ export function ComponentPreview({ tokens }: Props) {
         {/* Spacing Scale */}
         <PreviewCard title="Spacing Scale">
           <div className="space-y-3">
-            {spacingTokens.slice(0, 8).map((token) => {
-              const px = token.metadata?.px_value as number || parseInt(token.value);
+            {spacingValues.slice(0, 8).map((token, index) => {
+              const px = token.px || parseInt(token.value);
               return (
-                <div key={token.id} className="flex items-center gap-4">
+                <div key={index} className="flex items-center gap-4">
                   <span 
                     className="w-20 text-right font-mono text-sm"
                     style={{ color: textColor }}
@@ -223,18 +231,21 @@ export function ComponentPreview({ tokens }: Props) {
                 </div>
               );
             })}
+            {spacingValues.length === 0 && (
+              <p className="text-sm text-muted-foreground">No spacing values extracted</p>
+            )}
           </div>
         </PreviewCard>
         
         {/* Color Palette */}
         <PreviewCard title="Color Palette">
           <div className="grid grid-cols-4 gap-3">
-            {colorTokens.slice(0, 12).map((token) => (
-              <div key={token.id} className="text-center">
+            {allColors.slice(0, 12).map((color, index) => (
+              <div key={index} className="text-center">
                 <div
                   className="mb-2 aspect-square rounded-lg border shadow-sm"
                   style={{ 
-                    backgroundColor: token.value,
+                    backgroundColor: color.value,
                     borderColor: `${textColor}10`,
                   }}
                 />
@@ -242,10 +253,13 @@ export function ComponentPreview({ tokens }: Props) {
                   className="truncate text-xs"
                   style={{ color: textColor }}
                 >
-                  {token.name}
+                  {color.name}
                 </p>
               </div>
             ))}
+            {allColors.length === 0 && (
+              <p className="col-span-4 text-sm text-muted-foreground">No colors extracted</p>
+            )}
           </div>
         </PreviewCard>
       </div>
