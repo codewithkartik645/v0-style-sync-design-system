@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSiteById, getTokensBySiteId } from '@/lib/db';
-import type { DesignToken } from '@/lib/types';
+import type { DesignTokens, ColorToken, TypographyToken, SpacingToken } from '@/lib/types';
 
 export async function GET(
   request: NextRequest,
@@ -20,6 +20,12 @@ export async function GET(
     }
     
     const tokens = await getTokensBySiteId(id);
+    if (!tokens) {
+      return NextResponse.json(
+        { error: 'No tokens found for this site' },
+        { status: 404 }
+      );
+    }
     
     let output: string;
     let contentType: string;
@@ -59,7 +65,7 @@ export async function GET(
   }
 }
 
-function exportToCSS(tokens: DesignToken[], domain: string): string {
+function exportToCSS(tokens: DesignTokens, domain: string): string {
   const lines = [
     `/* Design Tokens extracted from ${domain} by StyleSync */`,
     `/* Generated on ${new Date().toISOString()} */`,
@@ -67,35 +73,43 @@ function exportToCSS(tokens: DesignToken[], domain: string): string {
     ':root {',
   ];
   
-  const colorTokens = tokens.filter(t => t.category === 'color');
-  const typographyTokens = tokens.filter(t => t.category === 'typography');
-  const spacingTokens = tokens.filter(t => t.category === 'spacing');
-  
-  if (colorTokens.length > 0) {
+  // Colors
+  if (tokens.colors) {
     lines.push('  /* Colors */');
-    for (const token of colorTokens) {
-      lines.push(`  --${token.name}: ${token.value};`);
+    for (const [category, colorTokens] of Object.entries(tokens.colors)) {
+      if (Array.isArray(colorTokens)) {
+        colorTokens.forEach((token: ColorToken, index: number) => {
+          const name = `color-${category}-${index}`;
+          lines.push(`  --${name}: ${token.value};`);
+        });
+      }
     }
     lines.push('');
   }
   
-  if (typographyTokens.length > 0) {
+  // Typography
+  if (tokens.typography) {
     lines.push('  /* Typography */');
-    for (const token of typographyTokens) {
-      const meta = token.metadata;
-      lines.push(`  --font-${token.name}: ${token.value};`);
-      if (meta.font_size) lines.push(`  --font-size-${token.name}: ${meta.font_size};`);
-      if (meta.font_weight) lines.push(`  --font-weight-${token.name}: ${meta.font_weight};`);
-      if (meta.line_height) lines.push(`  --line-height-${token.name}: ${meta.line_height};`);
+    for (const [category, typographyTokens] of Object.entries(tokens.typography)) {
+      if (Array.isArray(typographyTokens)) {
+        typographyTokens.forEach((token: TypographyToken, index: number) => {
+          const name = `font-${category}-${index}`;
+          lines.push(`  --${name}-family: ${token.fontFamily};`);
+          lines.push(`  --${name}-size: ${token.fontSize};`);
+          lines.push(`  --${name}-weight: ${token.fontWeight};`);
+          lines.push(`  --${name}-line-height: ${token.lineHeight};`);
+        });
+      }
     }
     lines.push('');
   }
   
-  if (spacingTokens.length > 0) {
+  // Spacing
+  if (tokens.spacing?.values) {
     lines.push('  /* Spacing */');
-    for (const token of spacingTokens) {
-      lines.push(`  --${token.name}: ${token.value};`);
-    }
+    tokens.spacing.values.forEach((token: SpacingToken, index: number) => {
+      lines.push(`  --space-${index}: ${token.value};`);
+    });
   }
   
   lines.push('}');
@@ -103,48 +117,49 @@ function exportToCSS(tokens: DesignToken[], domain: string): string {
   return lines.join('\n');
 }
 
-function exportToJSON(tokens: DesignToken[], domain: string): string {
-  const organized: Record<string, Record<string, { value: string; metadata: Record<string, unknown> }>> = {
-    colors: {},
-    typography: {},
-    spacing: {},
-  };
-  
-  for (const token of tokens) {
-    const category = token.category === 'color' ? 'colors' : token.category;
-    organized[category][token.name] = {
-      value: token.value,
-      metadata: token.metadata,
-    };
-  }
-  
+function exportToJSON(tokens: DesignTokens, domain: string): string {
   return JSON.stringify({
     $schema: 'https://stylesync.dev/schema/tokens.json',
     name: `${domain} Design Tokens`,
     generated: new Date().toISOString(),
-    ...organized,
+    colors: tokens.colors || {},
+    typography: tokens.typography || {},
+    spacing: tokens.spacing || {},
   }, null, 2);
 }
 
-function exportToTailwind(tokens: DesignToken[], domain: string): string {
-  const colorTokens = tokens.filter(t => t.category === 'color');
-  const spacingTokens = tokens.filter(t => t.category === 'spacing');
-  const typographyTokens = tokens.filter(t => t.category === 'typography');
-  
+function exportToTailwind(tokens: DesignTokens, domain: string): string {
   const colors: Record<string, string> = {};
-  for (const token of colorTokens) {
-    colors[token.name] = token.value;
-  }
-  
   const spacing: Record<string, string> = {};
-  for (const token of spacingTokens) {
-    const index = token.name.replace('space-', '');
-    spacing[index] = token.value;
+  const fontFamily: Record<string, string[]> = {};
+  
+  // Flatten colors
+  if (tokens.colors) {
+    for (const [category, colorTokens] of Object.entries(tokens.colors)) {
+      if (Array.isArray(colorTokens)) {
+        colorTokens.forEach((token: ColorToken, index: number) => {
+          colors[`${category}-${index}`] = token.value;
+        });
+      }
+    }
   }
   
-  const fontFamily: Record<string, string[]> = {};
-  for (const token of typographyTokens) {
-    fontFamily[token.name] = [token.value];
+  // Flatten spacing
+  if (tokens.spacing?.values) {
+    tokens.spacing.values.forEach((token: SpacingToken, index: number) => {
+      spacing[String(index)] = token.value;
+    });
+  }
+  
+  // Flatten typography
+  if (tokens.typography) {
+    for (const [category, typographyTokens] of Object.entries(tokens.typography)) {
+      if (Array.isArray(typographyTokens)) {
+        typographyTokens.forEach((token: TypographyToken, index: number) => {
+          fontFamily[`${category}-${index}`] = [token.fontFamily];
+        });
+      }
+    }
   }
   
   return `// Tailwind Config - Design Tokens from ${domain}

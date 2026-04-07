@@ -51,19 +51,7 @@ function SiteCard({ site }: { site: ScrapedSite }) {
       className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-md"
     >
       <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-        {site.favicon_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={site.favicon_url}
-            alt=""
-            className="size-8 object-contain"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-            }}
-          />
-        ) : null}
-        <GlobeIcon className={`size-6 text-muted-foreground ${site.favicon_url ? 'hidden' : ''}`} />
+        <GlobeIcon className="size-6 text-muted-foreground" />
       </div>
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-medium group-hover:text-primary transition-colors">
