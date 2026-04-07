@@ -178,24 +178,24 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
     <div className="min-h-screen bg-background" style={cssVariables as React.CSSProperties}>
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <div className="flex items-center gap-4">
+        <div className="mx-auto flex h-auto min-h-16 max-w-7xl flex-col gap-3 px-4 py-3 sm:h-16 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-0">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeftIcon className="size-4" />
-              <span className="text-sm">Back</span>
+              <span className="sr-only sm:not-sr-only text-sm">Back</span>
             </Link>
-            <div className="h-6 w-px bg-border" />
-            <div>
-              <h1 className="font-semibold">{site.title || site.domain}</h1>
-              <p className="text-xs text-muted-foreground">{site.url}</p>
+            <div className="h-6 w-px bg-border hidden sm:block" />
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate font-semibold">{site.title || site.domain}</h1>
+              <p className="truncate text-xs text-muted-foreground">{site.url}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="flex rounded-lg border border-border p-1">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex flex-1 rounded-lg border border-border p-1 sm:flex-none">
               <button
                 onClick={() => setActiveTab('tokens')}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-4 ${
                   activeTab === 'tokens'
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -205,7 +205,7 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
               </button>
               <button
                 onClick={() => setActiveTab('preview')}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-4 ${
                   activeTab === 'preview'
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -215,18 +215,19 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
               </button>
             </div>
             
-            <Button onClick={() => setIsExportOpen(true)}>
+            <Button onClick={() => setIsExportOpen(true)} size="sm" className="sm:size-default">
               <ExportIcon className="size-4" />
-              Export
+              <span className="hidden sm:inline">Export</span>
             </Button>
           </div>
         </div>
       </header>
       
       {activeTab === 'tokens' ? (
-        <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           {/* Category Filter */}
-          <div className="mb-8 flex items-center gap-2">
+          <div className="mb-6 -mx-4 px-4 overflow-x-auto sm:mx-0 sm:px-0 sm:mb-8">
+            <div className="flex items-center gap-2 min-w-max pb-2 sm:pb-0">
             <CategoryPill
               label="All"
               count={totalTokens}
@@ -251,10 +252,11 @@ export function DashboardClient({ initialSite, initialTokens }: Props) {
               isActive={activeCategory === 'spacing'}
               onClick={() => setActiveCategory('spacing')}
             />
+            </div>
           </div>
           
           {/* Token Grid */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {(activeCategory === 'all' || activeCategory === 'color') &&
               colorTokens.map(({ path, category, token, isLocked }) => (
                 <ColorTokenCard

@@ -86,8 +86,8 @@ export default function HomePage() {
       </section>
       
       {/* Footer */}
-      <footer className="border-t border-border px-6 py-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
+      <footer className="border-t border-border px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:gap-0 sm:text-left">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <StyleSyncLogo className="size-4" />
             <span>StyleSync</span>

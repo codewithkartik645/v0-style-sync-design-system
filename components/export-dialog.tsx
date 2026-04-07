@@ -49,7 +49,7 @@ export function ExportDialog({ isOpen, onClose, siteId, siteDomain }: Props) {
   }
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-background/80 backdrop-blur-sm"
@@ -57,15 +57,15 @@ export function ExportDialog({ isOpen, onClose, siteId, siteDomain }: Props) {
       />
       
       {/* Dialog */}
-      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold">Export Design Tokens</h2>
+      <div className="relative w-full max-w-md rounded-t-xl border border-border bg-card p-4 shadow-lg sm:mx-4 sm:rounded-xl sm:p-6">
+        <div className="mb-4 sm:mb-6">
+          <h2 className="text-lg font-semibold sm:text-xl">Export Design Tokens</h2>
           <p className="text-sm text-muted-foreground">
             Choose a format to export your tokens
           </p>
         </div>
         
-        <div className="mb-6 space-y-3">
+        <div className="mb-4 space-y-2 sm:mb-6 sm:space-y-3">
           <FormatOption
             format="css"
             title="CSS Variables"
@@ -92,11 +92,11 @@ export function ExportDialog({ isOpen, onClose, siteId, siteDomain }: Props) {
           />
         </div>
         
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose}>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
             Cancel
           </Button>
-          <Button onClick={handleExport} disabled={isExporting}>
+          <Button onClick={handleExport} disabled={isExporting} className="w-full sm:w-auto">
             {isExporting ? 'Exporting...' : 'Download'}
           </Button>
         </div>
@@ -123,20 +123,20 @@ function FormatOption({
   return (
     <button
       onClick={onSelect}
-      className={`flex w-full items-start gap-4 rounded-lg border p-4 text-left transition-colors ${
+      className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors sm:gap-4 sm:p-4 ${
         isSelected
           ? 'border-primary bg-primary/5'
           : 'border-border hover:border-primary/50 hover:bg-accent'
       }`}
     >
-      <div className={`rounded-lg p-2 ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+      <div className={`shrink-0 rounded-lg p-1.5 sm:p-2 ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
         {icon}
       </div>
-      <div className="flex-1">
-        <h3 className="font-medium">{title}</h3>
-        <p className="text-sm text-muted-foreground">{description}</p>
+      <div className="min-w-0 flex-1">
+        <h3 className="font-medium text-sm sm:text-base">{title}</h3>
+        <p className="text-xs text-muted-foreground sm:text-sm">{description}</p>
       </div>
-      <div className={`mt-1 size-5 rounded-full border-2 ${
+      <div className={`mt-1 size-4 shrink-0 rounded-full border-2 sm:size-5 ${
         isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
       }`}>
         {isSelected && (

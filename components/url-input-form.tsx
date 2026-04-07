@@ -40,9 +40,9 @@ export function UrlInputForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-2xl">
+    <form onSubmit={handleSubmit} className="w-full max-w-2xl px-4 sm:px-0">
       <div className="flex flex-col gap-4">
-        <div className="relative flex items-center gap-3">
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
               <GlobeIcon className="size-5 text-muted-foreground" />
@@ -52,7 +52,7 @@ export function UrlInputForm() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Enter any website URL..."
-              className="h-14 pl-12 pr-4 text-base"
+              className="h-12 pl-12 pr-4 text-base sm:h-14"
               disabled={isLoading}
             />
           </div>
@@ -60,7 +60,7 @@ export function UrlInputForm() {
             type="submit"
             size="lg"
             disabled={isLoading || !url.trim()}
-            className="h-14 px-8"
+            className="h-12 w-full px-8 sm:h-14 sm:w-auto"
           >
             {isLoading ? (
               <>
@@ -78,12 +78,12 @@ export function UrlInputForm() {
         
         {error && (
           <div className="flex items-center gap-2 text-destructive text-sm">
-            <AlertCircleIcon className="size-4" />
+            <AlertCircleIcon className="size-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
         
-        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
           <span>Try:</span>
           <button
             type="button"
@@ -92,7 +92,7 @@ export function UrlInputForm() {
           >
             vercel.com
           </button>
-          <span>or</span>
+          <span className="hidden sm:inline">or</span>
           <button
             type="button"
             onClick={() => setUrl('linear.app')}
@@ -100,7 +100,7 @@ export function UrlInputForm() {
           >
             linear.app
           </button>
-          <span>or</span>
+          <span className="hidden sm:inline">or</span>
           <button
             type="button"
             onClick={() => setUrl('stripe.com')}

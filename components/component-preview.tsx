@@ -38,13 +38,13 @@ export function ComponentPreview({ tokens }: Props) {
   const spacingValues = tokens.spacing?.values || [];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold">Component Preview</h2>
-        <p className="text-muted-foreground">See how extracted tokens look on real UI components</p>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mb-6 sm:mb-8">
+        <h2 className="text-xl font-semibold sm:text-2xl">Component Preview</h2>
+        <p className="text-sm text-muted-foreground sm:text-base">See how extracted tokens look on real UI components</p>
       </div>
       
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 lg:gap-8">
         {/* Buttons Preview */}
         <PreviewCard title="Buttons">
           <div className="flex flex-wrap gap-3">
@@ -239,7 +239,7 @@ export function ComponentPreview({ tokens }: Props) {
         
         {/* Color Palette */}
         <PreviewCard title="Color Palette">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
             {allColors.slice(0, 12).map((color, index) => (
               <div key={index} className="text-center">
                 <div
@@ -269,8 +269,8 @@ export function ComponentPreview({ tokens }: Props) {
 
 function PreviewCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
-      <h3 className="mb-4 text-sm font-medium text-muted-foreground">{title}</h3>
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
+      <h3 className="mb-3 text-sm font-medium text-muted-foreground sm:mb-4">{title}</h3>
       {children}
     </div>
   );
